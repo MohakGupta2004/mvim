@@ -1,4 +1,6 @@
+#include <asm-generic/errno-base.h>
 #include <ctype.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <termios.h>
@@ -9,9 +11,22 @@
 // overwrite 0100 value again.
 struct termios original_termios;
 /*
- * This function restores the value to it's original mode atexit.
+ * This fucntion is for error handling
  * */
-void disableRawMode() { tcsetattr(STDIN_FILENO, TCSAFLUSH, &original_termios); }
+void die(const char *s) {
+  perror(s);
+  exit(1);
+}
+
+/*
+ * This function restores the value to it's original mode atexit. if error
+ * happens it calls the die function.
+ * */
+void disableRawMode() {
+  if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &original_termios) == -1) {
+    die("tcsetattr");
+  }
+}
 /*
  * 1. settings the current terminal settings to original_termios so we can
  * restore it when we want.
@@ -62,12 +77,14 @@ void enableRawMode() {
   atexit(disableRawMode);
   struct termios raw = original_termios;
   raw.c_iflag &= ~(IXON | ICRNL | BRKINT | INPCK | ISTRIP);
-  raw.c_cflag |= ~(CS8);
+  raw.c_cflag |= (CS8);
   raw.c_oflag &= ~(OPOST);
   raw.c_lflag &= ~(ECHO | ICANON | ISIG | IEXTEN);
   raw.c_cc[VMIN] = 0;
   raw.c_cc[VTIME] = 1;
-  tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+  if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) == -1) {
+    die("tcsetattr");
+  }
 }
 
 /*
@@ -78,13 +95,18 @@ void enableRawMode() {
  * */
 int main(int argc, char *argv[]) {
   enableRawMode();
-  char c;
-  while (read(STDIN_FILENO, &c, 1) == 1 && c != 'q') {
+  while (1) {
+    char c = '\0';
+    if (read(STDIN_FILENO, &c, 1) == -1 && errno != EAGAIN) {
+      die("read");
+    }
     if (iscntrl(c)) {
       printf("%d\r\n", c);
     } else {
       printf("%d(%c)\r\n", c, c);
     }
+    if (c == 'q')
+      break;
   }
   return EXIT_SUCCESS;
 }
