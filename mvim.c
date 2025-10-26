@@ -26,13 +26,28 @@ void disableRawMode() { tcsetattr(STDIN_FILENO, TCSAFLUSH, &original_termios); }
  * meaning doing a NOT operation on the existing binary and doing an AND
  * operation on it which will make it 0. Assume: 0100, do NOT you are getting
  * 1011. do AND you'll get 0000),
- *      - IXEN = Setting the IXON which refers to the CTRL+S AND CTRL+Q issue.
+ *      - IXON = Setting the IXON which refers to the CTRL+S AND CTRL+Q issue.
  * As it freezes the output and CTRL+Q unfreezes it. We're stopping it.
  *      - ICRNL = ICRNL refers to the CTRL+M issue where CTRL+M means to \r
  * which generates similar ascii value of RETURN (10). So disabling it making
  * it 13.
+ *      - BRKINT = Sometimes break condition can apply which can make it
+ * generates a NULL byte which some terminal coz SIGINT. So making it without
+ * it.
+ *      - INPCK = Stands for Input Parity Checking.
+ *      - ISTRIP = Causes the 8th bit to get stripped.
+ * 5. setting the c_cflag as doing an BITWISE OR with CS8. It's not a flag it's
+ * a bitmask which is set for char bytes to only has 8 bits as it strips the
+ * last null byte.
  *
- * 5. setting the c_lflag (how local bytes are handled) as it'll wipe out,
+ * 6. setting the c_oflag to OPOST which means Ouptut post processing. It
+ * actually turns off \n to  \r\n and which returns actual values of processed
+ * keystroke.
+ *
+ * 7. set VMIN = 0 as VMIN means minimum number of bytes to read.
+ * 8. set VTIME = 1 as VTIME means 1 x 0.1 seconds = 100 miliseconds.
+ *
+ * 9. setting the c_lflag (how local bytes are handled) as it'll wipe out,
  *      - ECHO = Shows us whatever we're typing. Disabling it.
  *      - ICANON = Canonical mode. Not making it line by line otherwise making
  * it bytes by bytes. Disabling the line by line option.
@@ -46,26 +61,29 @@ void enableRawMode() {
   tcgetattr(STDIN_FILENO, &original_termios);
   atexit(disableRawMode);
   struct termios raw = original_termios;
-  raw.c_iflag &= ~(IXON | ICRNL);
+  raw.c_iflag &= ~(IXON | ICRNL | BRKINT | INPCK | ISTRIP);
+  raw.c_cflag |= ~(CS8);
+  raw.c_oflag &= ~(OPOST);
   raw.c_lflag &= ~(ECHO | ICANON | ISIG | IEXTEN);
+  raw.c_cc[VMIN] = 0;
+  raw.c_cc[VTIME] = 1;
   tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
 }
 
 /*
- * Enabling the raw mode.
- * Initialzing character which we're reading from the user as an input and if
- * the character is 'q' and user enters it'll stop the program and it'll display
- * the output and it's corresponding ascii characters
- *
+ * 1. Enabling the raw mode.
+ * 2. Initialzing character which we're reading from the user as an input and if
+ * 3. the character is 'q' and user enters it'll stop the program and it'll
+ * display the output and it's corresponding ascii characters
  * */
 int main(int argc, char *argv[]) {
   enableRawMode();
   char c;
   while (read(STDIN_FILENO, &c, 1) == 1 && c != 'q') {
     if (iscntrl(c)) {
-      printf("%d", c);
+      printf("%d\r\n", c);
     } else {
-      printf("%d(%c)", c, c);
+      printf("%d(%c)\r\n", c, c);
     }
   }
   return EXIT_SUCCESS;
