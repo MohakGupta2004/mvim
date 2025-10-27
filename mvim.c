@@ -1,3 +1,4 @@
+/* Includes */
 #include <asm-generic/errno-base.h>
 #include <ctype.h>
 #include <errno.h>
@@ -6,10 +7,18 @@
 #include <termios.h>
 #include <unistd.h>
 
+/* Defines */
+#define CTRL_KEY(k) ((k) & 0x1f)
+
+/* Data */
+
 // This is the original terminal settings before raw mode. Let's assume: 0100.
 // But after the changes in the raw before exist. **atexit() function it'll
 // overwrite 0100 value again.
 struct termios original_termios;
+
+/* Terminal */
+
 /*
  * This fucntion is for error handling
  * */
@@ -87,6 +96,8 @@ void enableRawMode() {
   }
 }
 
+/* Init */
+
 /*
  * 1. Enabling the raw mode.
  * 2. Initialzing character which we're reading from the user as an input and if
@@ -105,7 +116,7 @@ int main(int argc, char *argv[]) {
     } else {
       printf("%d(%c)\r\n", c, c);
     }
-    if (c == 'q')
+    if (c == CTRL_KEY('q'))
       break;
   }
   return EXIT_SUCCESS;
