@@ -23,6 +23,7 @@ struct termios original_termios;
  * This fucntion is for error handling
  * */
 void die(const char *s) {
+  write(STDIN_FILENO, "\x1b[?1049l", 8);
   perror(s);
   exit(1);
 }
@@ -96,6 +97,51 @@ void enableRawMode() {
   }
 }
 
+void editorInit() {
+  write(STDIN_FILENO, "\x1b[?1049h", 8); // Switch to alternate screen buffer
+  write(STDIN_FILENO, "\x1b[?25l", 6);   // Switch to alternate screen buffer
+}
+
+void editorQuit() {
+  write(STDIN_FILENO, "\x1b[?1049l", 8);
+  write(STDIN_FILENO, "\x1b[?25h", 6);
+}
+
+void drawRows() {
+  for (int i = 0; i < 24; i++) {
+    write(STDIN_FILENO, "~\r\n", 3);
+  }
+}
+
+// Reads a key from the standard input and returns it.
+char editorReadKey() {
+  char c = '\0';
+  while (read(STDIN_FILENO, &c, 1) == -1) {
+    if (errno != EAGAIN)
+      die("read");
+  }
+  return c;
+}
+/* Input */
+void editorKeyPress() {
+  char c = editorReadKey();
+  printf("%c", c);
+  switch (c) {
+  case CTRL_KEY('q'):
+    editorQuit();
+    exit(0);
+    break;
+  }
+}
+
+void editorRefreshScreen() {
+  //  system("clear");
+  write(STDIN_FILENO, "\x1b[2J", 4); // Clear that screen
+  write(STDIN_FILENO, "\x1b[H", 3);  // Move cursor to top-left corner
+  drawRows();
+  write(STDIN_FILENO, "\x1b[H", 3); // Move
+}
+
 /* Init */
 
 /*
@@ -106,18 +152,10 @@ void enableRawMode() {
  * */
 int main(int argc, char *argv[]) {
   enableRawMode();
+  editorInit();
   while (1) {
-    char c = '\0';
-    if (read(STDIN_FILENO, &c, 1) == -1 && errno != EAGAIN) {
-      die("read");
-    }
-    if (iscntrl(c)) {
-      printf("%d\r\n", c);
-    } else {
-      printf("%d(%c)\r\n", c, c);
-    }
-    if (c == CTRL_KEY('q'))
-      break;
+    editorRefreshScreen();
+    editorKeyPress();
   }
   return EXIT_SUCCESS;
 }
