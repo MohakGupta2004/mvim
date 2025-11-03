@@ -97,15 +97,19 @@ void enableRawMode() {
   }
 }
 
+/*
+ * Editor:
+ * 1. switching to a alternate screen using the editorInit() function where [ =>
+ * ESC or the control sequence, ?1049h hisdes the current screen and opens the
+ * alternate screen and 1029l means it'll stop when exit means it'll return to
+ * normal state or the previous screen before.
+ * 2. drawRows just prints the rows
+ * */
 void editorInit() {
   write(STDIN_FILENO, "\x1b[?1049h", 8); // Switch to alternate screen buffer
-  write(STDIN_FILENO, "\x1b[?25l", 6);   // Switch to alternate screen buffer
 }
 
-void editorQuit() {
-  write(STDIN_FILENO, "\x1b[?1049l", 8);
-  write(STDIN_FILENO, "\x1b[?25h", 6);
-}
+void editorQuit() { write(STDIN_FILENO, "\x1b[?1049l", 8); }
 
 void drawRows() {
   for (int i = 0; i < 24; i++) {
@@ -113,7 +117,12 @@ void drawRows() {
   }
 }
 
-// Reads a key from the standard input and returns it.
+/*
+ * 1. editorReadKey is looping over the input signal and it'll capture every
+ * input the user gives
+ * 2. editorKeyPress takes the input and perform certain tasks. Right now it's
+ * CTRL+Q for exit only.
+ * */
 char editorReadKey() {
   char c = '\0';
   while (read(STDIN_FILENO, &c, 1) == -1) {
@@ -133,6 +142,11 @@ void editorKeyPress() {
     break;
   }
 }
+
+/*
+ * This function helps the clear the alternate screeen, make the cursor go to
+ * the top right.
+ * */
 
 void editorRefreshScreen() {
   //  system("clear");
