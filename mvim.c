@@ -1,9 +1,11 @@
 /* Includes */
 #include <asm-generic/errno-base.h>
+#include <asm-generic/ioctls.h>
 #include <ctype.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/ioctl.h>
 #include <termios.h>
 #include <unistd.h>
 
@@ -15,8 +17,12 @@
 // This is the original terminal settings before raw mode. Let's assume: 0100.
 // But after the changes in the raw before exist. **atexit() function it'll
 // overwrite 0100 value again.
-struct termios original_termios;
-
+struct editorConfig {
+  struct termios original_termios;
+  int screenrows;
+  int screencolumns;
+};
+struct editorConfig E;
 /* Terminal */
 
 /*
@@ -33,7 +39,7 @@ void die(const char *s) {
  * happens it calls the die function.
  * */
 void disableRawMode() {
-  if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &original_termios) == -1) {
+  if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &E.original_termios) == -1) {
     die("tcsetattr");
   }
 }
@@ -83,9 +89,9 @@ void disableRawMode() {
  * 6. setting the terminal settings in raw.
  * */
 void enableRawMode() {
-  tcgetattr(STDIN_FILENO, &original_termios);
+  tcgetattr(STDIN_FILENO, &E.original_termios);
   atexit(disableRawMode);
-  struct termios raw = original_termios;
+  struct termios raw = E.original_termios;
   raw.c_iflag &= ~(IXON | ICRNL | BRKINT | INPCK | ISTRIP);
   raw.c_cflag |= (CS8);
   raw.c_oflag &= ~(OPOST);
@@ -105,14 +111,27 @@ void enableRawMode() {
  * normal state or the previous screen before.
  * 2. drawRows just prints the rows
  * */
+int getWindowSize(int *rows, int *cols) {
+  struct winsize w;
+  if (ioctl(STDIN_FILENO, TIOCGWINSZ, &w) == -1) {
+    return -1;
+  } else {
+    *rows = w.ws_row;
+    *cols = w.ws_col;
+    return 0;
+  }
+}
+
 void editorInit() {
   write(STDIN_FILENO, "\x1b[?1049h", 8); // Switch to alternate screen buffer
+  if (getWindowSize(&E.screenrows, &E.screencolumns) == -1)
+    die("getWindowSize");
 }
 
 void editorQuit() { write(STDIN_FILENO, "\x1b[?1049l", 8); }
 
 void drawRows() {
-  for (int i = 0; i < 24; i++) {
+  for (int i = 0; i < E.screenrows; i++) {
     write(STDIN_FILENO, "~\r\n", 3);
   }
 }
@@ -134,7 +153,6 @@ char editorReadKey() {
 /* Input */
 void editorKeyPress() {
   char c = editorReadKey();
-  printf("%c", c);
   switch (c) {
   case CTRL_KEY('q'):
     editorQuit();
@@ -167,6 +185,7 @@ void editorRefreshScreen() {
 int main(int argc, char *argv[]) {
   enableRawMode();
   editorInit();
+
   while (1) {
     editorRefreshScreen();
     editorKeyPress();
